@@ -261,7 +261,7 @@ func main() {
 			}
 
 			// call api
-			resp, err := http.Get("http://localhost:8080/time?city=" + url.QueryEscape(city))
+			resp, err := http.Get("https://clickclock-service.onrender.com/time?city=" + url.QueryEscape(city))
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Failed to fetch time! Error: %v", userMention, err))
 				return
