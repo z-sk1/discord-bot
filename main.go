@@ -90,6 +90,7 @@ func main() {
 		"!guess - Guess a number between 1-100! and !cancel to cancel the guessing game.",
 		"!rps - Play Rock, Paper, Scissors with the bot! !cancel to cancel the RPS game.",
 		"!weather <cityname> - Get the weather and more info about a specific city. e.g (!weather San Francisco)",
+		"!time <cityname> - Get the time and more info about a specific city. e.g (!time Detroit) disclaimer: may not work with certain cities as not all cities are tracked.",
 	}
 
 	// Add message handler
