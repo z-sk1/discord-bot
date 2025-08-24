@@ -248,6 +248,56 @@ func main() {
 				data.WindSpeed,
 				description))
 
+		} else if strings.HasPrefix(m.Content, "!time") {
+			if m.Content == "!cancel" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Your time request has been cancelled.", userMention))
+				return
+			}
+
+			city := strings.TrimSpace(strings.TrimPrefix(m.Content, "!time"))
+			if city == "" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Please provide a city name. Example: !time San Francisco", userMention))
+				return
+			}
+
+			// call api
+			resp, err := http.Get("http://localhost:8080/time?city=" + url.QueryEscape(city))
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Failed to fetch time! Error: %v", userMention, err))
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Error: %s", userMention, string(body)))
+				return
+			}
+
+			// json struct
+			var data struct {
+				Time      string `json:"time"`         // HH:MM
+				Timezone  string `json:"timezone"`     // e.g. Asia/Dubai
+				UTCOffset string `json:"utc_offset"`   // e.g. +04:00
+				ISO       string `json:"iso_datetime"` // full ISO timestamp
+				Date      string `json:"Date"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Failed to parse time data", userMention))
+				return
+			}
+
+			cityData := strings.Split(data.Timezone, "/")[1]
+			regionData := strings.Split(data.Timezone, "/")[0]
+			timezone := "UTC" + data.UTCOffset
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Time in **%s**: \n Time: %s \n Timezone: %s \n Region: %s \n Date: %s",
+				userMention,
+				cityData,
+				data.Time,
+				timezone,
+				regionData,
+				data.Date))
 		}
 
 		// handle commands
