@@ -313,7 +313,7 @@ func main() {
 			}
 
 			// call api
-			resp, err := http.Get("http://localhost:8081/define?word=" + url.QueryEscape(word))
+			resp, err := http.Get("https://easydefine-service.onrender.com/define?word=" + url.QueryEscape(word))
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Failed to fetch definition! Error: %v", userMention, err))
 				return
