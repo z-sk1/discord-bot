@@ -91,6 +91,7 @@ func main() {
 		"!rps - Play Rock, Paper, Scissors with the bot! !cancel to cancel the RPS game.",
 		"!weather <cityname> - Get the weather and more info about a specific city. e.g (!weather San Francisco)",
 		"!time <cityname> - Get the time and more info about a specific city. e.g (!time Detroit) disclaimer: may not work with certain cities as not all cities are tracked.",
+		"!define <word> - Get the definition, and more info about a specific word. e.g (!define gravity)",
 	}
 
 	// Add message handler
@@ -299,6 +300,68 @@ func main() {
 				timezone,
 				regionData,
 				data.Date))
+		} else if strings.HasPrefix(m.Content, "!define") {
+			if m.Content == "!cancel" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Your definition request has been cancelled.", userMention))
+				return
+			}
+
+			word := strings.TrimSpace(strings.TrimPrefix(m.Content, "!define"))
+			if word == "" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Please provide a valid word. Example: !define gravity", userMention))
+				return
+			}
+
+			// call api
+			resp, err := http.Get("http://localhost:8081/define?word=" + url.QueryEscape(word))
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Failed to fetch definition! Error: %v", userMention, err))
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Error: %s", userMention, string(body)))
+				return
+			}
+
+			// json struct
+			var data struct {
+				Word     string `json:"word"`
+				Meanings []struct {
+					PartOfSpeech string   `json:"partOfSpeech"`
+					Definitions  []string `json:"definitions"`
+					Synonyms     []string `json:"synonyms"`
+				} `json:"meanings"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Failed to parse definition data", userMention))
+				return
+			}
+
+			// build the message
+			if len(data.Meanings) == 0 {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, No definitions found for '%s'.", userMention, data.Word))
+				return
+			}
+
+			msg := fmt.Sprintf("%s, **%s**\n", userMention, data.Word)
+			for _, meaning := range data.Meanings {
+				msg += fmt.Sprintf("_%s_\n", meaning.PartOfSpeech)
+				for i, def := range meaning.Definitions {
+					if i > 2 {
+						msg += "...\n"
+						break
+					}
+					msg += fmt.Sprintf("• %s\n", def)
+				}
+				if len(meaning.Synonyms) > 0 {
+					msg += fmt.Sprintf("**Synonyms:** %s\n", strings.Join(meaning.Synonyms, ", "))
+				}
+				msg += "\n"
+			}
+			s.ChannelMessageSend(m.ChannelID, msg)
 		}
 
 		// handle commands
