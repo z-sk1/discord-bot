@@ -312,6 +312,11 @@ func main() {
 				return
 			}
 
+			if word == "Mr. Egg" || word == "Mr Egg" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, **%s**: \n _noun_ \n • Youssef Amro Abdul Lateef Ali Hussein Naeim \n • he kinda dumb ngl", userMention, word))
+				return
+			}
+
 			// call api
 			resp, err := http.Get("https://easydefine-service.onrender.com/define?word=" + url.QueryEscape(word))
 			if err != nil {
