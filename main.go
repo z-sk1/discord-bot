@@ -64,6 +64,12 @@ func main() {
 
 	var rpsWaitingContinue = make(map[string]bool)
 
+	var weatherWaiting = make(map[string]bool)
+
+	var defineWaiting = make(map[string]bool)
+
+	var timeWaiting = make(map[string]bool)
+
 	var weatherDescriptions = map[int]string{
 		0:  "Clear sky ☀️",
 		1:  "Mainly clear 🌤️",
@@ -218,17 +224,22 @@ func main() {
 			return
 		}
 
-		if strings.HasPrefix(m.Content, "!weather") {
+		if weatherWaiting[m.Author.ID] || timeWaiting[m.Author.ID] || defineWaiting[m.Author.ID] {
 			if m.Content == "!cancel" {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Your weather request has been cancelled.", userMention))
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Your request has been cancelled.", userMention))
 				return
 			}
+			return
+		}
 
+		if strings.HasPrefix(m.Content, "!weather") {
 			city := strings.TrimSpace(strings.TrimPrefix(m.Content, "!weather"))
 			if city == "" {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, please provide a city name. Example: !weather San Francisco", userMention))
 				return
 			}
+
+			weatherWaiting[m.Author.ID] = true
 
 			// call api
 			resp, err := http.Get("https://weathery-service.onrender.com/weather?city=" + url.QueryEscape(city))
@@ -266,19 +277,17 @@ func main() {
 				data.Humidity,
 				data.WindSpeed,
 				description))
-			return
+
+			delete(weatherWaiting, m.Author.ID)
 
 		} else if strings.HasPrefix(m.Content, "!time") {
-			if m.Content == "!cancel" {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Your time request has been cancelled.", userMention))
-				return
-			}
-
 			city := strings.TrimSpace(strings.TrimPrefix(m.Content, "!time"))
 			if city == "" {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Please provide a city name. Example: !time San Francisco", userMention))
 				return
 			}
+
+			timeWaiting[m.Author.ID] = true
 
 			// call api
 			resp, err := http.Get("https://clickclock-service.onrender.com/time?city=" + url.QueryEscape(city))
@@ -318,18 +327,17 @@ func main() {
 				timezone,
 				regionData,
 				data.Date))
-			return
-		} else if strings.HasPrefix(m.Content, "!define") {
-			if m.Content == "!cancel" {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Your definition request has been cancelled.", userMention))
-				return
-			}
 
+			delete(timeWaiting, m.Author.ID)
+
+		} else if strings.HasPrefix(m.Content, "!define") {
 			word := strings.TrimSpace(strings.TrimPrefix(m.Content, "!define"))
 			if word == "" {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Please provide a valid word. Example: !define gravity", userMention))
 				return
 			}
+
+			defineWaiting[m.Author.ID] = true
 
 			// call api
 			resp, err := http.Get("https://easydefine-service.onrender.com/define?word=" + url.QueryEscape(word))
@@ -381,7 +389,9 @@ func main() {
 				msg += "\n"
 			}
 			s.ChannelMessageSend(m.ChannelID, msg)
-			return
+
+			delete(defineWaiting, m.Author.ID)
+
 		} else if strings.HasPrefix(m.Content, "!gif") {
 
 			var popularSearchTerms = []string{
@@ -457,7 +467,6 @@ func main() {
 			}
 
 			s.ChannelMessageSendEmbed(m.ChannelID, embed)
-			return
 		} else if strings.HasPrefix(m.Content, "!math") {
 			exprInput := strings.TrimSpace(strings.TrimPrefix(m.Content, "!math"))
 			if exprInput == "" {
@@ -485,7 +494,6 @@ func main() {
 			}
 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, **`%s`** = **`%v`**", userMention, exprInput, result))
-			return
 		}
 
 		// handle commands
