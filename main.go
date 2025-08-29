@@ -35,6 +35,19 @@ func main() {
 
 	fmt.Println("Token loaded: ", token[:5]+"...") // show first few chars
 
+	file2, err := os.Open("apiKey.txt")
+	if err != nil {
+		panic(err)
+	}
+	defer file2.Close()
+
+	scanner2 := bufio.NewScanner(file2)
+	scanner2.Scan()
+
+	key := strings.TrimSpace(scanner2.Text())
+
+	fmt.Println("Tenor Api Key loaded: " + key[:5] + "...")
+
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("Error creating discord session:", err)
@@ -89,6 +102,8 @@ func main() {
 		"!slot - A slot machine with emojis, can you get all 3?",
 		"!guess - Guess a number between 1-100! and !cancel to cancel the guessing game.",
 		"!rps - Play Rock, Paper, Scissors with the bot! !cancel to cancel the RPS game.",
+		"!meme - Sends a random meme!",
+		"!gif <optional: search-term> - Sends a random gif! But if you include the search term, e.g (!gif wolf), it will pick a random result based on your search.",
 		"!weather <cityname> - Get the weather and more info about a specific city. e.g (!weather San Francisco)",
 		"!time <cityname> - Get the time and more info about a specific city. e.g (!time Detroit) disclaimer: may not work with certain cities as not all cities are tracked.",
 		"!define <word> - Get the definition, and more info about a specific word. e.g (!define gravity)",
@@ -362,6 +377,81 @@ func main() {
 				msg += "\n"
 			}
 			s.ChannelMessageSend(m.ChannelID, msg)
+		} else if strings.HasPrefix(m.Content, "!gif") {
+
+			var popularSearchTerms = []string{
+				"funny", "cat", "dog", "meme", "dance", "reaction", "lol", "fail", "cute",
+			}
+
+			type MediaFormat struct {
+				URL string `json:"url"`
+			}
+
+			type TenorResult struct {
+				MediaFormats map[string]MediaFormat `json:"media_formats"`
+				ContentDesc  string                 `json:"content_description"`
+			}
+
+			type TenorResponse struct {
+				Results []TenorResult `json:"results"`
+			}
+
+			input := strings.TrimSpace(strings.TrimPrefix(m.Content, "!gif"))
+
+			var term string
+
+			if input == "" {
+				term = popularSearchTerms[rand.Intn(len(popularSearchTerms))]
+			} else {
+				term = input
+			}
+
+			displayTerm := term
+			searchTerm := url.QueryEscape(term)
+
+			url := fmt.Sprintf("https://tenor.googleapis.com/v2/search?q=%s&key=%s&limit=1&random=true", searchTerm, key)
+			resp, err := http.Get(url)
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Couldn't fetch the gif :skull:", userMention))
+				return
+			}
+			defer resp.Body.Close()
+
+			var gif TenorResponse
+			if err := json.NewDecoder(resp.Body).Decode(&gif); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Error decoding Tenor response :skull:", userMention))
+				return
+			}
+
+			if len(gif.Results) == 0 {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, No gifs found wtf :sob:", userMention))
+				return
+			}
+
+			// try to gte gif/tinygif
+			var gifURL string
+			if val, ok := gif.Results[0].MediaFormats["gif"]; ok {
+				gifURL = val.URL
+			} else if val, ok := gif.Results[0].MediaFormats["tinygif"]; ok {
+				gifURL = val.URL
+			} else if val, ok := gif.Results[0].MediaFormats["mediumgif"]; ok {
+				gifURL = val.URL
+			}
+
+			if gifURL == "" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Couldn't find a usable gif :sob:", userMention))
+				return
+			}
+
+			embed := &discordgo.MessageEmbed{
+				Title: fmt.Sprintf("GIF: %s", displayTerm),
+				Image: &discordgo.MessageEmbedImage{
+					URL: gifURL,
+				},
+				Color: 0xff69b4,
+			}
+
+			s.ChannelMessageSendEmbed(m.ChannelID, embed)
 		}
 
 		// handle commands
@@ -407,6 +497,35 @@ func main() {
 			botChoice := options[index]
 			playingRPS[m.Author.ID] = botChoice
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, I have picked. Your turn!", userMention))
+		case "!meme":
+			resp, err := http.Get("https://meme-api.com/gimme")
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch a meme :skull:", userMention))
+				return
+			}
+			defer resp.Body.Close()
+
+			var meme struct {
+				PostLink string `json:"postLink"`
+				URL      string `json:"url"`
+				Title    string `json:"title"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&meme); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode meme :skull:", userMention))
+				return
+			}
+
+			embed := &discordgo.MessageEmbed{
+				Title: meme.Title,
+				URL:   meme.PostLink,
+				Image: &discordgo.MessageEmbedImage{
+					URL: meme.URL,
+				},
+				Color: 0x00ff00, // green border
+			}
+
+			s.ChannelMessageSendEmbed(m.ChannelID, embed)
 		case "!help":
 			commands := strings.Join(cmdList, "\n")
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
