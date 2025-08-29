@@ -115,6 +115,7 @@ func main() {
 		"!meme - Sends a random meme!",
 		"!joke - Sends a random joke!",
 		"!fact - Sends a random useless fact!",
+		"!advice - Sends you some random 'life-changing' advice!",
 		"!gif <optional: search-term> - Sends a random gif! But if you include the search term, Usage: `!gif wolf`, it will pick a random result based on your search.",
 		"!weather <cityname> - Get the weather and more info about a specific city. Usage: `!weather San Francisco`",
 		"!time <cityname> - Get the time and more info about a specific city. Usage: `!time Detroit` disclaimer: may not work with certain cities as not all cities are tracked.",
@@ -675,6 +676,27 @@ func main() {
 			}
 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your useless fact:\n_%s_", userMention, data.Text))
+		case "!advice":
+			resp, err := http.Get("https://api.adviceslip.com/advice")
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch life changing advice :sob:", userMention))
+				return
+			}
+			defer resp.Body.Close()
+
+			var adviceData struct {
+				Slip struct {
+					ID     int    `json:"id"`
+					Advice string `json:"advice"`
+				} `json:"slip"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&adviceData); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode life-changing advice :sob:", userMention))
+				return
+			}
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your life-changing advice:\n_%s_", userMention, adviceData.Slip.Advice))
 		case "!help":
 			commands := strings.Join(cmdList, "\n")
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
