@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -21,6 +22,18 @@ import (
 	"github.com/Knetic/govaluate"
 	"github.com/bwmarrin/discordgo"
 )
+
+type TriviaQuestion struct {
+	Question         string   `json:"question"`
+	CorrectAnswer    string   `json:"correct_answer"`
+	IncorrectAnswers []string `json:"incorrect_answers"`
+	Type             string   `json:"type"`
+}
+
+type OpenTDBResponse struct {
+	ResponseCode int              `json:"response_code"`
+	Results      []TriviaQuestion `json:"results"`
+}
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
@@ -62,9 +75,19 @@ func main() {
 
 	var guessersWaitingContinue = make(map[string]bool)
 
+	var guessingTries = make(map[string]int)
+
 	var playingRPS = make(map[string]string)
 
 	var rpsWaitingContinue = make(map[string]bool)
+
+	var playingTrivia = make(map[string]TriviaQuestion)
+
+	var triviaWaiting = make(map[string]bool)
+
+	var triviaTries = make(map[string]int)
+
+	var triviaChoices = make(map[string]map[string]string)
 
 	var weatherWaiting = make(map[string]bool)
 
@@ -111,6 +134,7 @@ func main() {
 		"!slot - A slot machine with emojis, can you get all 3?",
 		"!guess - Guess a number between 1-100! and !cancel to cancel the guessing game.",
 		"!rps - Play Rock, Paper, Scissors with the bot! !cancel to cancel the RPS game.",
+		"!trivia - Play Trivia with the bot with 3 tries! !cancel to cancel.",
 		"!quote - Sends a random quote!",
 		"!meme - Sends a random meme!",
 		"!joke - Sends a random joke!",
@@ -141,11 +165,13 @@ func main() {
 					// restart game
 					target := rand.Intn(100) + 1
 					guessers[m.Author.ID] = target
-					rpsWaitingContinue[m.Author.ID] = false
+					guessingTries[m.Author.ID] = 0
+					guessersWaitingContinue[m.Author.ID] = false
 					s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Guess a Number between 1 and 100!", userMention))
 				} else if m.Content == "n" || m.Content == "!cancel" {
 					s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Game over! Thanks for playing.", userMention))
 					delete(guessers, m.Author.ID)
+					delete(guessingTries, m.Author.ID)
 					delete(guessersWaitingContinue, m.Author.ID)
 					return
 				} else {
@@ -167,11 +193,13 @@ func main() {
 			}
 
 			if guess > target {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Too high, try again!", userMention))
+				guessingTries[m.Author.ID]++
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Too high, try again! Current Tries: %d", userMention, guessingTries[m.Author.ID]))
 			} else if guess < target {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Too low, try again!", userMention))
+				guessingTries[m.Author.ID]++
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Too low, try again! Current Tries: %d", userMention, guessingTries[m.Author.ID]))
 			} else {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Good job! You guessed it! The number was %d. Would you like to try again? (y/n)", userMention, target))
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Good job! You guessed it! The number was %d, and you took %d tries. Would you like to try again? (y/n)", userMention, target, guessingTries[m.Author.ID]))
 				guessersWaitingContinue[m.Author.ID] = true
 			}
 			return
@@ -230,6 +258,113 @@ func main() {
 				return
 			}
 			return
+		}
+
+		if q, ok := playingTrivia[m.Author.ID]; ok {
+			// waiting continue?
+			if triviaWaiting[m.Author.ID] {
+				if m.Content == "y" {
+					// restart game
+					resp, err := http.Get("https://opentdb.com/api.php?amount=1")
+					if err != nil {
+						s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch trivia question :sob:", userMention))
+						return
+					}
+					defer resp.Body.Close()
+
+					var triviaResp OpenTDBResponse
+					if err := json.NewDecoder(resp.Body).Decode(&triviaResp); err != nil {
+						s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode trivia question :skull:", userMention))
+						return
+					}
+
+					if len(triviaResp.Results) == 0 {
+						s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s No trivia question found :sob:", userMention))
+						return
+					}
+
+					q := triviaResp.Results[0]
+					q.Question = html.UnescapeString(q.Question)
+					q.CorrectAnswer = html.UnescapeString(q.CorrectAnswer)
+					for i := range q.IncorrectAnswers {
+						q.IncorrectAnswers[i] = html.UnescapeString(q.IncorrectAnswers[i])
+					}
+
+					playingTrivia[m.Author.ID] = q
+					triviaTries[m.Author.ID] = 0
+					triviaWaiting[m.Author.ID] = false
+
+					if q.Type == "multiple" {
+						// build choices
+						choices := append(q.IncorrectAnswers, q.CorrectAnswer)
+						rand.Shuffle(len(choices), func(i, j int) { choices[i], choices[j] = choices[j], choices[i] })
+
+						choiceMap := map[string]string{"A": choices[0], "B": choices[1], "C": choices[2], "D": choices[3]}
+
+						triviaChoices[m.Author.ID] = choiceMap
+
+						msg := fmt.Sprintf("%s Trivia Time\n**Questions:**\n_%s_\n", userMention, q.Question)
+						msg += fmt.Sprintf("A: %s\nB: %s\nC: %s\nD: %s", choiceMap["A"], choiceMap["B"], choiceMap["C"], choiceMap["D"])
+						s.ChannelMessageSend(m.ChannelID, msg)
+
+					} else if q.Type == "boolean" {
+						s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Trivia Time\n**Questions:**\n_%s_\nTrue or false?", userMention, q.Question))
+					} else {
+						s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Trivia Time\n**Questions:**\n_%s_", userMention, q.Question))
+					}
+					return
+				} else if m.Content == "n" || m.Content == "!cancel" {
+					s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Game over! Thanks for playing.", userMention))
+					delete(playingTrivia, m.Author.ID)
+					delete(triviaTries, m.Author.ID)
+					delete(triviaWaiting, m.Author.ID)
+					delete(triviaChoices, m.Author.ID)
+					return
+				} else {
+					return
+				}
+			}
+			userInput := m.Content
+
+			if q.Type == "multiple" {
+				if userInput == "!cancel" {
+					delete(playingTrivia, m.Author.ID)
+					s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Your trivia game has been cancelled.", userMention))
+					return
+				}
+
+				// convert input to uppercase A/B/C/D
+				userInput = strings.ToUpper(userInput)
+
+				if choice, ok := triviaChoices[m.Author.ID][userInput]; ok && choice == q.CorrectAnswer {
+					s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Correct Answer! Tries: %d Continue? (y/n)", userMention, triviaTries[m.Author.ID]))
+					triviaWaiting[m.Author.ID] = true
+				} else {
+					triviaTries[m.Author.ID]++
+					s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Wrong! :skull: Tries: %d/1 The answer was: ||%s|| Continue? (y/n)", userMention, triviaTries[m.Author.ID], q.CorrectAnswer))
+					triviaWaiting[m.Author.ID] = true
+				}
+			} else {
+				// boolean or text
+				if userInput == "!cancel" {
+					delete(playingTrivia, m.Author.ID)
+					s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Your trivia game has been cancelled.", userMention))
+					return
+				}
+
+				if strings.EqualFold(userInput, q.CorrectAnswer) {
+					s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Correct Answer! Tries: %d Continue? (y/n)", userMention, triviaTries[m.Author.ID]))
+					triviaWaiting[m.Author.ID] = true
+				} else {
+					triviaTries[m.Author.ID]++
+					if triviaTries[m.Author.ID] >= 3 {
+						s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Out of tries! :skull: The answer was: ||%s|| Continue? (y/n)", userMention, q.CorrectAnswer))
+						triviaWaiting[m.Author.ID] = true
+					} else {
+						s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Wrong! Try again. Attempt %d/3", userMention, triviaTries[m.Author.ID]))
+					}
+				}
+			}
 		}
 
 		if weatherWaiting[m.Author.ID] || timeWaiting[m.Author.ID] || defineWaiting[m.Author.ID] {
@@ -564,6 +699,7 @@ func main() {
 		case "!guess":
 			target := rand.Intn(100) + 1
 			guessers[m.Author.ID] = target
+			guessingTries[m.Author.ID] = 0
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Guess a Number between 1 and 100!", userMention))
 		case "!rps":
 			options := []string{"Rock", "Paper", "Scissors"}
@@ -571,6 +707,53 @@ func main() {
 			botChoice := options[index]
 			playingRPS[m.Author.ID] = botChoice
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, I have picked. Your turn!", userMention))
+		case "!trivia":
+			resp, err := http.Get("https://opentdb.com/api.php?amount=1")
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch trivia question :sob:", userMention))
+				return
+			}
+			defer resp.Body.Close()
+
+			var triviaResp OpenTDBResponse
+			if err := json.NewDecoder(resp.Body).Decode(&triviaResp); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode trivia question :skull:", userMention))
+				return
+			}
+
+			if len(triviaResp.Results) == 0 {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s No trivia question found :sob:", userMention))
+				return
+			}
+
+			q := triviaResp.Results[0]
+			q.Question = html.UnescapeString(q.Question)
+			q.CorrectAnswer = html.UnescapeString(q.CorrectAnswer)
+			for i := range q.IncorrectAnswers {
+				q.IncorrectAnswers[i] = html.UnescapeString(q.IncorrectAnswers[i])
+			}
+
+			playingTrivia[m.Author.ID] = q
+			triviaTries[m.Author.ID] = 0
+
+			if q.Type == "multiple" {
+				// build choices
+				choices := append(q.IncorrectAnswers, q.CorrectAnswer)
+				rand.Shuffle(len(choices), func(i, j int) { choices[i], choices[j] = choices[j], choices[i] })
+
+				choiceMap := map[string]string{"A": choices[0], "B": choices[1], "C": choices[2], "D": choices[3]}
+
+				triviaChoices[m.Author.ID] = choiceMap
+
+				msg := fmt.Sprintf("%s Trivia Time\n**Questions:**\n_%s_\n", userMention, q.Question)
+				msg += fmt.Sprintf("A: %s\nB: %s\nC: %s\nD: %s", choiceMap["A"], choiceMap["B"], choiceMap["C"], choiceMap["D"])
+				s.ChannelMessageSend(m.ChannelID, msg)
+
+			} else if q.Type == "boolean" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Trivia Time\n**Questions:**\n_%s_\nTrue or false?", userMention, q.Question))
+			} else {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Trivia Time\n**Questions:**\n_%s_", userMention, q.Question))
+			}
 		case "!meme":
 			resp, err := http.Get("https://meme-api.com/gimme")
 			if err != nil {
