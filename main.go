@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Knetic/govaluate"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -103,10 +104,11 @@ func main() {
 		"!guess - Guess a number between 1-100! and !cancel to cancel the guessing game.",
 		"!rps - Play Rock, Paper, Scissors with the bot! !cancel to cancel the RPS game.",
 		"!meme - Sends a random meme!",
-		"!gif <optional: search-term> - Sends a random gif! But if you include the search term, e.g (!gif wolf), it will pick a random result based on your search.",
-		"!weather <cityname> - Get the weather and more info about a specific city. e.g (!weather San Francisco)",
-		"!time <cityname> - Get the time and more info about a specific city. e.g (!time Detroit) disclaimer: may not work with certain cities as not all cities are tracked.",
-		"!define <word> - Get the definition, and more info about a specific word. e.g (!define gravity)",
+		"!gif <optional: search-term> - Sends a random gif! But if you include the search term, Usage: `!gif wolf`, it will pick a random result based on your search.",
+		"!weather <cityname> - Get the weather and more info about a specific city. Usage: `!weather San Francisco`",
+		"!time <cityname> - Get the time and more info about a specific city. Usage: `!time Detroit` disclaimer: may not work with certain cities as not all cities are tracked.",
+		"!define <word> - Get the definition, and more info about a specific word. Usage: `!define gravity`",
+		"!math <expression> - Input a math expression and get the answer! Usage: `!math 10+5x2+3`)",
 	}
 
 	// Add message handler
@@ -264,6 +266,7 @@ func main() {
 				data.Humidity,
 				data.WindSpeed,
 				description))
+			return
 
 		} else if strings.HasPrefix(m.Content, "!time") {
 			if m.Content == "!cancel" {
@@ -294,8 +297,8 @@ func main() {
 			// json struct
 			var data struct {
 				Time      string `json:"time"`         // HH:MM
-				Timezone  string `json:"timezone"`     // e.g. Asia/Dubai
-				UTCOffset string `json:"utc_offset"`   // e.g. +04:00
+				Timezone  string `json:"timezone"`     // Usage: Asia/Dubai
+				UTCOffset string `json:"utc_offset"`   // Usage: +04:00
 				ISO       string `json:"iso_datetime"` // full ISO timestamp
 				Date      string `json:"Date"`
 			}
@@ -315,6 +318,7 @@ func main() {
 				timezone,
 				regionData,
 				data.Date))
+			return
 		} else if strings.HasPrefix(m.Content, "!define") {
 			if m.Content == "!cancel" {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Your definition request has been cancelled.", userMention))
@@ -324,11 +328,6 @@ func main() {
 			word := strings.TrimSpace(strings.TrimPrefix(m.Content, "!define"))
 			if word == "" {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Please provide a valid word. Example: !define gravity", userMention))
-				return
-			}
-
-			if word == "Mr. Egg" || word == "Mr Egg" {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, **%s**: \n _noun_ \n • Youssef Amro Abdul Lateef Ali Hussein Naeim \n • he kinda dumb ngl", userMention, word))
 				return
 			}
 
@@ -382,6 +381,7 @@ func main() {
 				msg += "\n"
 			}
 			s.ChannelMessageSend(m.ChannelID, msg)
+			return
 		} else if strings.HasPrefix(m.Content, "!gif") {
 
 			var popularSearchTerms = []string{
@@ -457,6 +457,35 @@ func main() {
 			}
 
 			s.ChannelMessageSendEmbed(m.ChannelID, embed)
+			return
+		} else if strings.HasPrefix(m.Content, "!math") {
+			exprInput := strings.TrimSpace(strings.TrimPrefix(m.Content, "!math"))
+			if exprInput == "" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Please provide a math expression. Example: `!math 2+2*5`", userMention))
+				return
+			}
+
+			var exprStr string
+
+			if strings.Contains(exprInput, "x") {
+				exprStr = strings.Replace(exprInput, "x", "*", -1)
+			}
+
+			// parse and evaluate omg :O
+			expr, err := govaluate.NewEvaluableExpression(exprStr)
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Invalid Expression! Example: `9/3`", userMention))
+				return
+			}
+
+			result, err := expr.Evaluate(nil)
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Error Evaluating Expression!", userMention))
+				return
+			}
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, **`%s`** = **`%v`**", userMention, exprInput, result))
+			return
 		}
 
 		// handle commands
