@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"time"
 
+	"crypto/tls"
+
 	"github.com/Knetic/govaluate"
 	"github.com/bwmarrin/discordgo"
 )
@@ -109,12 +111,14 @@ func main() {
 		"!slot - A slot machine with emojis, can you get all 3?",
 		"!guess - Guess a number between 1-100! and !cancel to cancel the guessing game.",
 		"!rps - Play Rock, Paper, Scissors with the bot! !cancel to cancel the RPS game.",
+		"!quote - Sends a random quote!",
 		"!meme - Sends a random meme!",
 		"!gif <optional: search-term> - Sends a random gif! But if you include the search term, Usage: `!gif wolf`, it will pick a random result based on your search.",
 		"!weather <cityname> - Get the weather and more info about a specific city. Usage: `!weather San Francisco`",
 		"!time <cityname> - Get the time and more info about a specific city. Usage: `!time Detroit` disclaimer: may not work with certain cities as not all cities are tracked.",
 		"!define <word> - Get the definition, and more info about a specific word. Usage: `!define gravity`",
 		"!math <expression> - Input a math expression and get the answer! Usage: `!math 10+5x2+3`)",
+		"!avatar <usermention> - Get the PFP of any user in the server! Usage: `!avatar @ziadsk`",
 	}
 
 	// Add message handler
@@ -592,6 +596,40 @@ func main() {
 			}
 
 			s.ChannelMessageSendEmbed(m.ChannelID, embed)
+		case "!quote":
+			client := http.Client{
+				Timeout: time.Second * 10,
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				},
+			}
+			req, _ := http.NewRequest("GET", "https://api.quotable.io/random", nil)
+			req.Header.Set("User-Agent", "discord-bot (https://github.com/z-sk1, v1.0)")
+
+			resp, err := client.Do(req)
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch a quote :skull:", userMention))
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				body, _ := io.ReadAll(resp.Body)
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Error fetching quote :skull:: %s", userMention, string(body)))
+				return
+			}
+
+			var quote struct {
+				Content string `json:"content"`
+				Author  string `json:"author"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&quote); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode quote :skull:", userMention))
+				return
+			}
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, \n 💬 _%s_\n— **_%s_**", userMention, quote.Content, quote.Author))
 		case "!help":
 			commands := strings.Join(cmdList, "\n")
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
