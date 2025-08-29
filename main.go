@@ -494,6 +494,28 @@ func main() {
 			}
 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, **`%s`** = **`%v`**", userMention, exprInput, result))
+		} else if strings.HasPrefix(m.Content, "!avatar") {
+			// get mentioned user with @
+			var user *discordgo.User
+			if len(m.Mentions) > 0 {
+				user = m.Mentions[0] // take the first mentioned user
+			} else {
+				user = m.Author
+			}
+
+			// Get avatar url
+			avatarURL := user.AvatarURL("1024") // 1024 px size
+
+			embed := &discordgo.MessageEmbed{
+				Title: fmt.Sprintf("%s, %s's PFP", m.Author.Username, user.Username),
+				Image: &discordgo.MessageEmbedImage{
+					URL: avatarURL,
+				},
+				Color: 0x00ffff,
+			}
+
+			s.ChannelMessageSendEmbed(m.ChannelID, embed)
+			return
 		}
 
 		// handle commands
