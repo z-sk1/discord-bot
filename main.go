@@ -661,6 +661,26 @@ func main() {
 
 			s.ChannelMessageSendEmbed(m.ChannelID, embed)
 			return
+		} else if strings.HasPrefix(m.Content, "!reverse") {
+			text := strings.TrimSpace(strings.TrimPrefix(m.Content, "!reverse"))
+			if text == "" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Please include text. Useage: `!reverse Hello`"))
+				return
+			}
+
+			content := m.Content             // full message string
+			parts := strings.Fields(content) // split by spaces
+			// "args" will be everything after the command
+			args := parts[1:]
+
+			input := strings.Join(args, " ")
+			runes := []rune(input)
+			for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+				runes[i], runes[j] = runes[j], runes[i]
+			}
+			reversed := string(runes)
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s %s", userMention, reversed))
 		}
 
 		// handle commands
