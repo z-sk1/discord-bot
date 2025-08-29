@@ -630,6 +630,31 @@ func main() {
 			}
 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, \n 💬 _%s_\n— **_%s_**", userMention, quote.Content, quote.Author))
+		case "!joke":
+			resp, err := http.Get("https://v2.jokeapi.dev/joke/Any")
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch a joke :skull:", userMention))
+				return
+			}
+			defer resp.Body.Close()
+
+			var data struct {
+				Type     string `json:"type"`
+				Setup    string `json:"setup"`
+				Delivery string `json:"delivery"`
+				Joke     string `json:"joke"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode joke :skull:", userMention))
+				return
+			}
+
+			if data.Type == "single" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, %s", userMention, data.Joke))
+			} else {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, %s\n||**_%s_**||", userMention, data.Setup, data.Delivery))
+			}
 		case "!help":
 			commands := strings.Join(cmdList, "\n")
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
