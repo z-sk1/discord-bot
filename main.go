@@ -116,6 +116,7 @@ func main() {
 		"!joke - Sends a random joke!",
 		"!fact - Sends a random useless fact!",
 		"!advice - Sends you some random 'life-changing' advice!",
+		"!insult - Roasts you. Have fun.",
 		"!gif <optional: search-term> - Sends a random gif! But if you include the search term, Usage: `!gif wolf`, it will pick a random result based on your search.",
 		"!weather <cityname> - Get the weather and more info about a specific city. Usage: `!weather San Francisco`",
 		"!time <cityname> - Get the time and more info about a specific city. Usage: `!time Detroit` disclaimer: may not work with certain cities as not all cities are tracked.",
@@ -697,6 +698,24 @@ func main() {
 			}
 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your life-changing advice:\n_%s_", userMention, adviceData.Slip.Advice))
+		case "!insult":
+			resp, err := http.Get("https://evilinsult.com/generate_insult.php?lang=en&type=json")
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch insult :skull:", userMention))
+				return
+			}
+			defer resp.Body.Close()
+
+			var insultData struct {
+				Insult string `json:"insult"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&insultData); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode insult :skull:", userMention))
+				return
+			}
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your roast:\n_%s_", userMention, insultData.Insult))
 		case "!help":
 			commands := strings.Join(cmdList, "\n")
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
