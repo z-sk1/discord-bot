@@ -478,6 +478,8 @@ func main() {
 
 			if strings.Contains(exprInput, "x") {
 				exprStr = strings.Replace(exprInput, "x", "*", -1)
+			} else {
+				exprStr = exprInput
 			}
 
 			// parse and evaluate omg :O
