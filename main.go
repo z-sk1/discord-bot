@@ -681,6 +681,30 @@ func main() {
 			reversed := string(runes)
 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s %s", userMention, reversed))
+		} else if strings.HasPrefix(m.Content, "!mock") {
+			text := strings.TrimSpace(strings.TrimPrefix(m.Content, "!mock"))
+			if text == "" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Please include text. Useage: `!mock Hello`"))
+				return
+			}
+
+			content := m.Content             // full message string
+			parts := strings.Fields(content) // split by spaces
+			// "args" will be everything after the command
+			args := parts[1:]
+
+			input := strings.Join(args, " ")
+			mocked := ""
+
+			for _, c := range input {
+				if rand.Intn(2) == 0 {
+					mocked += strings.ToLower(string(c))
+				} else {
+					mocked += strings.ToUpper(string(c))
+				}
+			}
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s %s", userMention, mocked))
 		}
 
 		// handle commands
