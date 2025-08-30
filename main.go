@@ -143,6 +143,7 @@ func main() {
 		"!insult - Roasts you. Have fun.",
 		"!reverse <text> - Reverses text you input! Usage: `!reverse Hello World!`",
 		"!mock <text> - Capitalises random letters in your sentence! Usage: `!mock Hello World!`",
+		"flip <text> - Flips the characters in your sentence! Usage: `!flip Hello World!`",
 		"!gif <optional: search-term> - Sends a random gif! But if you include the search term, Usage: `!gif wolf`, it will pick a random result based on your search.",
 		"!weather <cityname> - Get the weather and more info about a specific city. Usage: `!weather San Francisco`",
 		"!time <cityname> - Get the time and more info about a specific city. Usage: `!time Detroit` disclaimer: may not work with certain cities as not all cities are tracked.",
@@ -707,6 +708,53 @@ func main() {
 			}
 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s %s", userMention, mocked))
+		} else if strings.HasPrefix(m.Content, "!flip") {
+			text := strings.TrimSpace(strings.TrimPrefix(m.Content, "!flip"))
+			if text == "" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Please include text. Useage: `!flip Hello`", userMention))
+				return
+			}
+
+			content := m.Content             // full message string
+			parts := strings.Fields(content) // split by spaces
+			// "args" will be everything after calling the cmd
+			args := parts[1:]
+
+			input := strings.Join(args, " ")
+
+			flipMap := map[rune]rune{
+				'a': 'ɐ', 'b': 'q', 'c': 'ɔ', 'd': 'p',
+				'e': 'ǝ', 'f': 'ɟ', 'g': 'ƃ', 'h': 'ɥ',
+				'i': 'ᴉ', 'j': 'ɾ', 'k': 'ʞ', 'l': 'ʃ',
+				'm': 'ɯ', 'n': 'u', 'o': 'o', 'p': 'd',
+				'q': 'b', 'r': 'ɹ', 's': 's', 't': 'ʇ',
+				'u': 'n', 'v': 'ʌ', 'w': 'ʍ', 'x': 'x',
+				'y': 'ʎ', 'z': 'z',
+				'A': '∀', 'B': '𐐒', 'C': 'Ɔ', 'D': 'p',
+				'E': 'Ǝ', 'F': 'Ⅎ', 'G': 'פ', 'H': 'H',
+				'I': 'I', 'J': 'ſ', 'K': 'ʞ', 'L': '˥',
+				'M': 'W', 'N': 'N', 'O': 'O', 'P': 'Ԁ',
+				'Q': 'Q', 'R': 'ᴚ', 'S': 'S', 'T': '┴',
+				'U': '∩', 'V': 'Λ', 'W': 'M', 'X': 'X',
+				'Y': '⅄', 'Z': 'Z',
+				'1': 'Ɩ', '2': 'ᄅ', '3': 'Ɛ', '4': 'ㄣ',
+				'5': 'ϛ', '6': '9', '7': 'ㄥ', '8': '8',
+				'9': '6', '0': '0',
+				'.': '˙', ',': '\'', '\'': ',',
+				'_': '‾', '&': '⅋', '?': '¿', '!': '¡',
+			}
+
+			// flip
+			var flipped []rune
+			for _, r := range input {
+				if f, ok := flipMap[r]; ok {
+					flipped = append([]rune{f}, flipped...)
+				} else {
+					flipped = append([]rune{r}, flipped...)
+				}
+			}
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s %s", userMention, string(flipped)))
 		}
 
 		// handle commands
