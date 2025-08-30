@@ -141,6 +141,8 @@ func main() {
 		"!fact - Sends a random useless fact!",
 		"!advice - Sends you some random 'life-changing' advice!",
 		"!insult - Roasts you. Have fun.",
+		"!reverse <text> - Reverses text you input! Usage: `!reverse Hello World!`",
+		"!mock <text> - Capitalises random letters in your sentence! Usage: `!mock Hello World!`",
 		"!gif <optional: search-term> - Sends a random gif! But if you include the search term, Usage: `!gif wolf`, it will pick a random result based on your search.",
 		"!weather <cityname> - Get the weather and more info about a specific city. Usage: `!weather San Francisco`",
 		"!time <cityname> - Get the time and more info about a specific city. Usage: `!time Detroit` disclaimer: may not work with certain cities as not all cities are tracked.",
@@ -664,7 +666,7 @@ func main() {
 		} else if strings.HasPrefix(m.Content, "!reverse") {
 			text := strings.TrimSpace(strings.TrimPrefix(m.Content, "!reverse"))
 			if text == "" {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Please include text. Useage: `!reverse Hello`"))
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Please include text. Useage: `!reverse Hello`", userMention))
 				return
 			}
 
@@ -684,7 +686,7 @@ func main() {
 		} else if strings.HasPrefix(m.Content, "!mock") {
 			text := strings.TrimSpace(strings.TrimPrefix(m.Content, "!mock"))
 			if text == "" {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Please include text. Useage: `!mock Hello`"))
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Please include text. Useage: `!mock Hello`", userMention))
 				return
 			}
 
@@ -943,6 +945,24 @@ func main() {
 			}
 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your roast:\n_%s_", userMention, insultData.Insult))
+		case "!chucknorris":
+			resp, err := http.Get("https://api.chucknorris.io/jokes/random")
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch a Chuck Norris joke :sob:", userMention))
+				return
+			}
+			defer resp.Body.Close()
+
+			var result struct {
+				Value string `json:"value"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode joke", userMention))
+				return
+			}
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s\n Chuck Norris once said:\n _%s_", userMention, result.Value))
 		case "!help":
 			commands := strings.Join(cmdList, "\n")
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
