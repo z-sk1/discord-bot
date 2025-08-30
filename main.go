@@ -138,6 +138,7 @@ func main() {
 		"!quote - Sends a random quote!",
 		"!meme - Sends a random meme!",
 		"!joke - Sends a random joke!",
+		"!pickup - Sends a random pickup line!",
 		"!fact - Sends a random useless fact!",
 		"!advice - Sends you some random 'life-changing' advice!",
 		"!insult - Roasts you. Have fun.",
@@ -745,7 +746,8 @@ func main() {
 			}
 
 			// flip
-			var flipped []rune
+			flipped := []rune{}
+
 			for _, r := range input {
 				if f, ok := flipMap[r]; ok {
 					flipped = append([]rune{f}, flipped...)
@@ -1011,6 +1013,24 @@ func main() {
 			}
 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s\n Chuck Norris once said:\n _%s_", userMention, result.Value))
+		case "!pickup":
+			resp, err := http.Get("https://rizzapi.vercel.app/random")
+			if err != nil {
+				s.ChannelMessageSend("%s Couldn't fetch a pickup line :sob;", userMention)
+				return
+			}
+			defer resp.Body.Close()
+
+			var result struct {
+				Text string `json:"text"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode pickup line :sob:", userMention))
+				return
+			}
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your rizzy ahh pickup line:\n_%s_", userMention, result.Text))
 		case "!help":
 			commands := strings.Join(cmdList, "\n")
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
