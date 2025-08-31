@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -33,6 +34,91 @@ type TriviaQuestion struct {
 type OpenTDBResponse struct {
 	ResponseCode int              `json:"response_code"`
 	Results      []TriviaQuestion `json:"results"`
+}
+
+var wyrMsgID string
+
+func startWouldYouRatherPoll(s *discordgo.Session, channelID string, question string, duration int, username string) {
+	embed := &discordgo.MessageEmbed{
+		Title:       fmt.Sprintf("%s, Would you Rather?", username),
+		Description: fmt.Sprintf("**_%s_**", question),
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "🅰️ Option A", Value: "React below", Inline: false},
+			{Name: "🅱️ Option B", Value: "React below", Inline: false},
+			{Name: "⏳ Time Left", Value: fmt.Sprintf("%d seconds", duration), Inline: false},
+		},
+		Color: 0x5865F2,
+	}
+
+	// send embed
+	msg, err := s.ChannelMessageSendEmbed(channelID, embed)
+	if err != nil {
+		log.Println("Failed to send embed :skull:")
+		return
+	}
+
+	wyrMsgID = msg.ID
+
+	// add reactions
+	s.MessageReactionAdd(channelID, msg.ID, "🅰️")
+	s.MessageReactionAdd(channelID, msg.ID, "🅱️")
+
+	go func() {
+		remaining := duration
+		for remaining > 0 {
+			time.Sleep(1 * time.Second)
+			remaining--
+
+			// update embed with seconds remaining
+			embed.Fields[2].Value = fmt.Sprintf("%d seconds", remaining)
+			s.ChannelMessageEditEmbed(channelID, msg.ID, embed)
+		}
+
+		// time's up. fetch results using count!
+		aVotes, aVotesPerc, bVotes, bVotesPerc := countReactions(s, channelID, msg.ID)
+
+		// edit embed for final results
+		embed.Fields = []*discordgo.MessageEmbedField{
+			{Name: "🅰️ Option A", Value: fmt.Sprintf("%d votes, %s", aVotes, aVotesPerc), Inline: false},
+			{Name: "🅱️ Option B", Value: fmt.Sprintf("%d votes, %s", bVotes, bVotesPerc), Inline: false},
+		}
+		embed.Title = "Would you Rather? Results"
+		s.ChannelMessageEditEmbed(channelID, msg.ID, embed)
+		s.MessageReactionsRemoveAll(channelID, msg.ID)
+	}()
+}
+
+func countReactions(s *discordgo.Session, channelID string, msgID string) (int, string, int, string) {
+	msg, err := s.ChannelMessage(channelID, msgID)
+	if err != nil {
+		log.Println("Failed to fetch msg")
+		return 0, "", 0, ""
+	}
+
+	aCount := map[string]int{
+		"raw":  0,
+		"perc": 0,
+	}
+
+	bCount := map[string]int{
+		"raw":  0,
+		"perc": 0,
+	}
+
+	for _, r := range msg.Reactions {
+		switch r.Emoji.Name {
+		case "🅰️":
+			aCount["raw"] = r.Count - 1 // subtract bot
+		case "🅱️":
+			bCount["raw"] = r.Count - 1
+		}
+	}
+
+	sum := aCount["raw"] + bCount["raw"]
+	aCount["perc"] = aCount["raw"] / sum * 100
+	bCount["perc"] = bCount["raw"] / sum * 100
+
+	return aCount["raw"], fmt.Sprintf("%d%%", aCount["perc"]), bCount["raw"], fmt.Sprintf("%d%%", bCount["perc"])
 }
 
 func main() {
@@ -153,6 +239,34 @@ func main() {
 		"!avatar <usermention> - Get the PFP of any user in the server! Usage: `!avatar @ziadsk`",
 	}
 
+	dg.AddHandler(func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+		// ignore the bot’s own reactions
+		if r.UserID == s.State.User.ID {
+			return
+		}
+
+		// only handle the active WYR message
+		if r.MessageID != wyrMsgID {
+			return
+		}
+
+		log.Printf("ReactionAdd on WYR: emoji=%q user=%s", r.Emoji.Name, r.UserID)
+
+		var other string
+		switch r.Emoji.Name {
+		case "🅰️":
+			other = "🅱️"
+		case "🅱️":
+			other = "🅰️"
+		default:
+			return
+		}
+
+		if err := s.MessageReactionRemove(r.ChannelID, r.MessageID, other, r.UserID); err != nil {
+			log.Printf("failed to remove opposite reaction %q for user %s: %v", other, r.UserID, err)
+		}
+	})
+
 	// Add message handler
 	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if m.Author.ID == s.State.User.ID {
@@ -160,6 +274,7 @@ func main() {
 		}
 
 		userMention := fmt.Sprintf("<@%s>", m.Author.ID)
+		userName := m.Author.Username
 
 		// check if the user is currently guessing a num
 		if target, ok := guessers[m.Author.ID]; ok {
@@ -656,7 +771,7 @@ func main() {
 			avatarURL := user.AvatarURL("1024") // 1024 px size
 
 			embed := &discordgo.MessageEmbed{
-				Title: fmt.Sprintf("%s, %s's PFP", m.Author.Username, user.Username),
+				Title: fmt.Sprintf("%s, %s's PFP", userName, user.Username),
 				Image: &discordgo.MessageEmbedImage{
 					URL: avatarURL,
 				},
@@ -1031,6 +1146,24 @@ func main() {
 			}
 
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your rizzy ahh pickup line:\n_%s_", userMention, result.Text))
+		case "!wouldyourather":
+			resp, err := http.Get("https://api.truthordarebot.xyz/v1/wyr")
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch a Would You Rather Question :skull:", userMention))
+				return
+			}
+			defer resp.Body.Close()
+
+			var result struct {
+				Question string `json:"question"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode Would You Rather question :sob:", userMention))
+				return
+			}
+
+			startWouldYouRatherPoll(s, m.ChannelID, result.Question, 60, userName)
 		case "!help":
 			commands := strings.Join(cmdList, "\n")
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
