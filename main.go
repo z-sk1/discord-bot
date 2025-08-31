@@ -1165,8 +1165,14 @@ func main() {
 
 			startWouldYouRatherPoll(s, m.ChannelID, result.Question, 60, userName)
 		case "!help":
+			dmChannel, err := s.UserChannelCreate(m.Author.ID)
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, I couldn't send you a DM! Do you have DMs disabled?", m.Author.Mention()))
+				return
+			}
+
 			commands := strings.Join(cmdList, "\n")
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
+			s.ChannelMessageSend(dmChannel.ID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
 		}
 	})
 
