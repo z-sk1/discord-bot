@@ -276,6 +276,12 @@ func main() {
 		userMention := fmt.Sprintf("<@%s>", m.Author.ID)
 		userName := m.Author.Username
 
+		dmChannel, err := s.UserChannelCreate(m.Author.ID)
+		if err != nil {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, I couldn't send you a DM! Do you have DMs disabled?", m.Author.Mention()))
+			return
+		}
+
 		// check if the user is currently guessing a num
 		if target, ok := guessers[m.Author.ID]; ok {
 			// check if use is waiting for continue
@@ -721,7 +727,7 @@ func main() {
 			}
 
 			embed := &discordgo.MessageEmbed{
-				Title: fmt.Sprintf("GIF: %s", displayTerm),
+				Title: fmt.Sprintf("%s, GIF: %s", userName, displayTerm),
 				Image: &discordgo.MessageEmbedImage{
 					URL: gifURL,
 				},
@@ -985,7 +991,7 @@ func main() {
 			}
 
 			embed := &discordgo.MessageEmbed{
-				Title: meme.Title,
+				Title: fmt.Sprintf("%s, %s", userName, meme.Title),
 				URL:   meme.PostLink,
 				Image: &discordgo.MessageEmbedImage{
 					URL: meme.URL,
@@ -1165,12 +1171,6 @@ func main() {
 
 			startWouldYouRatherPoll(s, m.ChannelID, result.Question, 60, userName)
 		case "!help":
-			dmChannel, err := s.UserChannelCreate(m.Author.ID)
-			if err != nil {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, I couldn't send you a DM! Do you have DMs disabled?", m.Author.Mention()))
-				return
-			}
-
 			commands := strings.Join(cmdList, "\n")
 			s.ChannelMessageSend(dmChannel.ID, fmt.Sprintf("%s, here are all the currently available commands: \n%s", userMention, commands))
 		}
