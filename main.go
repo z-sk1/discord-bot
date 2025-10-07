@@ -164,6 +164,8 @@ func main() {
 
 	aiKey := strings.TrimSpace(scanner3.Text())
 
+	fmt.Printf("Gemini API Key loaded: %s...\n", aiKey[:5])
+
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("Error creating discord session:", err)
@@ -196,6 +198,28 @@ func main() {
 	var timeWaiting = make(map[string]bool)
 
 	var shortenWaiting = make(map[string]bool)
+
+	var aiWaiting = make(map[string]bool)
+
+	var gifWaiting = make(map[string]bool)
+
+	var memeWaiting = make(map[string]bool)
+
+	var quoteWaiting = make(map[string]bool)
+
+	var jokeWaiting = make(map[string]bool)
+
+	var pickupWaiting = make(map[string]bool)
+
+	var factWaiting = make(map[string]bool)
+
+	var adviceWaiting = make(map[string]bool)
+
+	var roastWaiting = make(map[string]bool)
+
+	var chucknorrisWaiting = make(map[string]bool)
+
+	var wouldyouratherWaiting = make(map[string]bool)
 
 	var weatherDescriptions = map[int]string{
 		0:  "Clear sky ☀️",
@@ -243,7 +267,7 @@ func main() {
 		"!pickup - Sends a random pickup line!",
 		"!fact - Sends a random useless fact!",
 		"!advice - Sends you some random 'life-changing' advice!",
-		"!insult - Roasts you. Have fun.",
+		"!roast - Roasts you. Have fun.",
 		"!reverse <text> - Reverses text you input! Usage: `!reverse Hello World!`",
 		"!mock <text> - Capitalises random letters in your sentence! Usage: `!mock Hello World!`",
 		"flip <text> - Flips the characters in your sentence! Usage: `!flip Hello World!`",
@@ -254,6 +278,7 @@ func main() {
 		"!shorten <url> - Shorten any link! Usage: `!shorten apple.com`",
 		"!math <expression> - Input a math expression and get the answer! Usage: `!math 10+5x2+3`)",
 		"!avatar <usermention> - Get the PFP of any user in the server! Usage: `!avatar @ziadsk`",
+		"!ai <prompt> - Ask Gemini anything! Usage: `!ai How are you today?`",
 	}
 
 	dg.AddHandler(func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
@@ -509,7 +534,7 @@ func main() {
 			}
 		}
 
-		if weatherWaiting[m.Author.ID] || timeWaiting[m.Author.ID] || defineWaiting[m.Author.ID] || shortenWaiting[m.Author.ID] {
+		if weatherWaiting[m.Author.ID] || timeWaiting[m.Author.ID] || defineWaiting[m.Author.ID] || shortenWaiting[m.Author.ID] || aiWaiting[m.Author.ID] || gifWaiting[m.Author.ID] || memeWaiting[m.Author.ID] || quoteWaiting[m.Author.ID] || jokeWaiting[m.Author.ID] || pickupWaiting[m.Author.ID] || factWaiting[m.Author.ID] || adviceWaiting[m.Author.ID] || roastWaiting[m.Author.ID] || chucknorrisWaiting[m.Author.ID] || wouldyouratherWaiting[m.Author.ID] {
 			if m.Content == "!cancel" {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Your request has been cancelled.", userMention))
 				return
@@ -525,6 +550,19 @@ func main() {
 			}
 
 			weatherWaiting[m.Author.ID] = true
+			done := make(chan bool)
+
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
 
 			// call api
 			resp, err := http.Get("https://weathery-service.onrender.com/weather?city=" + url.QueryEscape(city))
@@ -553,6 +591,8 @@ func main() {
 				return
 			}
 
+			done <- true
+
 			description := weatherDescriptions[data.WeatherCode]
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Weather in **%s**:\n🌡️ %.1f °C\n🌧️ %.1f mm rain\n💧 %.0f%% humidity\n💨 %.1f km/h wind\n☁️ %s",
 				userMention,
@@ -573,6 +613,19 @@ func main() {
 			}
 
 			timeWaiting[m.Author.ID] = true
+			done := make(chan bool)
+
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
 
 			// call api
 			resp, err := http.Get("https://clickclock-service.onrender.com/time?city=" + url.QueryEscape(city))
@@ -605,6 +658,8 @@ func main() {
 			regionData := strings.Split(data.Timezone, "/")[0]
 			timezone := "UTC" + data.UTCOffset
 
+			done <- true
+
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Time in **%s**: \n Time: %s \n Timezone: %s \n Region: %s \n Date: %s",
 				userMention,
 				cityData,
@@ -623,6 +678,19 @@ func main() {
 			}
 
 			defineWaiting[m.Author.ID] = true
+			done := make(chan bool)
+
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
 
 			// call api
 			resp, err := http.Get("https://easydefine-service.onrender.com/define?word=" + url.QueryEscape(word))
@@ -673,6 +741,9 @@ func main() {
 				}
 				msg += "\n"
 			}
+
+			done <- true
+
 			s.ChannelMessageSend(m.ChannelID, msg)
 
 			delete(defineWaiting, m.Author.ID)
@@ -684,6 +755,19 @@ func main() {
 			}
 
 			shortenWaiting[m.Author.ID] = true
+			done := make(chan bool)
+
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
 
 			// add https:// if missing
 			if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
@@ -725,6 +809,8 @@ func main() {
 				return
 			}
 
+			done <- true
+
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Shortened URL: %s", userMention, shortURL))
 
 			delete(shortenWaiting, m.Author.ID)
@@ -736,6 +822,21 @@ func main() {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Please enter a valid request.", userMention))
 				return
 			}
+
+			aiWaiting[m.Author.ID] = true
+			done := make(chan bool)
+
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(time.Second * 8)
+					}
+				}
+			}()
 
 			apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=%s", key)
 
@@ -759,9 +860,35 @@ func main() {
 			body, _ := io.ReadAll(resp.Body)
 			var result map[string]interface{}
 			if err := json.Unmarshal(body, &result); err != nil {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to parse Gemini response!"))
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to parse Gemini response!", userMention))
 				return
 			}
+
+			output := ""
+			if candidates, ok := result["candidates"].([]interface{}); ok && len(candidates) > 0 {
+				first := candidates[0].(map[string]interface{})
+				if content, ok := first["content"].(map[string]interface{}); ok {
+					if parts, ok := content["parts"].([]interface{}); ok && len(parts) > 0 {
+						if text, ok := parts[0].(map[string]interface{})["text"].(string); ok {
+							output = text
+						}
+					}
+				}
+			}
+
+			if output == "" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s No response from Gemini", userMention))
+				return
+			}
+
+			if len(output) > 1900 {
+				output = output[:1900] + "..."
+			}
+
+			done <- true
+			delete(aiWaiting, m.Author.ID)
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, %s", userMention, output))
 
 		} else if strings.HasPrefix(m.Content, "!gif") {
 
@@ -794,6 +921,21 @@ func main() {
 
 			displayTerm := term
 			searchTerm := url.QueryEscape(term)
+
+			gifWaiting[m.Author.ID] = true
+			done := make(chan bool)
+
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
 
 			url := fmt.Sprintf("https://tenor.googleapis.com/v2/search?q=%s&key=%s&limit=1&random=true", searchTerm, key)
 			resp, err := http.Get(url)
@@ -836,6 +978,9 @@ func main() {
 				},
 				Color: 0xff69b4,
 			}
+
+			done <- true
+			delete(gifWaiting, m.Author.ID)
 
 			s.ChannelMessageSendEmbed(m.ChannelID, embed)
 		} else if strings.HasPrefix(m.Content, "!math") {
@@ -1075,6 +1220,21 @@ func main() {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Trivia Time\n**Questions:**\n_%s_", userMention, q.Question))
 			}
 		case "!meme":
+			memeWaiting[m.Author.ID] = true
+			done := make(chan bool)
+
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
+
 			resp, err := http.Get("https://meme-api.com/gimme")
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch a meme :skull:", userMention))
@@ -1102,8 +1262,25 @@ func main() {
 				Color: 0x00ff00, // green border
 			}
 
+			done <- true
+			delete(timeWaiting, m.Author.ID)
+
 			s.ChannelMessageSendEmbed(m.ChannelID, embed)
 		case "!quote":
+			quoteWaiting[m.Author.ID] = true
+			done := make(chan bool)
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
+
 			client := http.Client{
 				Timeout: time.Second * 10,
 				Transport: &http.Transport{
@@ -1136,8 +1313,25 @@ func main() {
 				return
 			}
 
+			done <- true
+			delete(quoteWaiting, m.Author.ID)
+
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, \n 💬 _%s_\n— **_%s_**", userMention, quote.Content, quote.Author))
 		case "!joke":
+			jokeWaiting[m.Author.ID] = true
+			done := make(chan bool)
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
+
 			resp, err := http.Get("https://v2.jokeapi.dev/joke/Any")
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch a joke :skull:", userMention))
@@ -1157,12 +1351,29 @@ func main() {
 				return
 			}
 
+			done <- true
+			delete(jokeWaiting, m.Author.ID)
+
 			if data.Type == "single" {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, %s", userMention, data.Joke))
 			} else {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, %s\n||**_%s_**||", userMention, data.Setup, data.Delivery))
 			}
 		case "!fact":
+			factWaiting[m.Author.ID] = true
+			done := make(chan bool)
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
+
 			resp, err := http.Get("https://uselessfacts.jsph.pl/random.json?language=en")
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch a fact :skull:", userMention))
@@ -1179,8 +1390,25 @@ func main() {
 				return
 			}
 
+			done <- true
+			delete(factWaiting, m.Author.ID)
+
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your useless fact:\n_%s_", userMention, data.Text))
 		case "!advice":
+			adviceWaiting[m.Author.ID] = true
+			done := make(chan bool)
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
+
 			resp, err := http.Get("https://api.adviceslip.com/advice")
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch life changing advice :sob:", userMention))
@@ -1200,8 +1428,25 @@ func main() {
 				return
 			}
 
+			done <- true
+			delete(adviceWaiting, m.Author.ID)
+
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your life-changing advice:\n_%s_", userMention, adviceData.Slip.Advice))
-		case "!insult":
+		case "!roast":
+			roastWaiting[m.Author.ID] = true
+			done := make(chan bool)
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
+
 			resp, err := http.Get("https://evilinsult.com/generate_insult.php?lang=en&type=json")
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch insult :skull:", userMention))
@@ -1218,8 +1463,25 @@ func main() {
 				return
 			}
 
+			done <- true
+			delete(roastWaiting, m.Author.ID)
+
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your roast:\n_%s_", userMention, insultData.Insult))
 		case "!chucknorris":
+			chucknorrisWaiting[m.Author.ID] = true
+			done := make(chan bool)
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
+
 			resp, err := http.Get("https://api.chucknorris.io/jokes/random")
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch a Chuck Norris joke :sob:", userMention))
@@ -1236,8 +1498,25 @@ func main() {
 				return
 			}
 
+			done <- true
+			delete(chucknorrisWaiting, m.Author.ID)
+
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s\n Chuck Norris once said:\n _%s_", userMention, result.Value))
 		case "!pickup":
+			pickupWaiting[m.Author.ID] = true
+			done := make(chan bool)
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
+
 			resp, err := http.Get("https://rizzapi.vercel.app/random")
 			if err != nil {
 				s.ChannelMessageSend("%s Couldn't fetch a pickup line :sob;", userMention)
@@ -1254,8 +1533,25 @@ func main() {
 				return
 			}
 
+			done <- true
+			delete(pickupWaiting, m.Author.ID)
+
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, your rizzy ahh pickup line:\n_%s_", userMention, result.Text))
 		case "!wouldyourather":
+			wouldyouratherWaiting[m.Author.ID] = true
+			done := make(chan bool)
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						s.ChannelTyping(m.ChannelID)
+						time.Sleep(8 * time.Second)
+					}
+				}
+			}()
+
 			resp, err := http.Get("https://api.truthordarebot.xyz/v1/wyr")
 			if err != nil {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Couldn't fetch a Would You Rather Question :skull:", userMention))
@@ -1271,6 +1567,9 @@ func main() {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to decode Would You Rather question :sob:", userMention))
 				return
 			}
+
+			done <- true
+			delete(wouldyouratherWaiting, m.Author.ID)
 
 			startWouldYouRatherPoll(s, m.ChannelID, result.Question, 60, userName)
 		case "!help":
