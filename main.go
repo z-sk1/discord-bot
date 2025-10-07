@@ -20,6 +20,9 @@ import (
 
 	"crypto/tls"
 
+	"bytes"
+	"regexp"
+
 	"github.com/Knetic/govaluate"
 	"github.com/bwmarrin/discordgo"
 )
@@ -150,6 +153,17 @@ func main() {
 
 	fmt.Println("Tenor Api Key loaded: " + key[:5] + "...")
 
+	file3, err := os.Open("geminiKey.txt")
+	if err != nil {
+		panic(err)
+	}
+	defer file3.Close()
+
+	scanner3 := bufio.NewScanner(file3)
+	scanner3.Scan()
+
+	aiKey := strings.TrimSpace(scanner3.Text())
+
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("Error creating discord session:", err)
@@ -180,6 +194,8 @@ func main() {
 	var defineWaiting = make(map[string]bool)
 
 	var timeWaiting = make(map[string]bool)
+
+	var shortenWaiting = make(map[string]bool)
 
 	var weatherDescriptions = map[int]string{
 		0:  "Clear sky ☀️",
@@ -235,6 +251,7 @@ func main() {
 		"!weather <cityname> - Get the weather and more info about a specific city. Usage: `!weather San Francisco`",
 		"!time <cityname> - Get the time and more info about a specific city. Usage: `!time Detroit` disclaimer: may not work with certain cities as not all cities are tracked.",
 		"!define <word> - Get the definition, and more info about a specific word. Usage: `!define gravity`",
+		"!shorten <url> - Shorten any link! Usage: `!shorten apple.com`",
 		"!math <expression> - Input a math expression and get the answer! Usage: `!math 10+5x2+3`)",
 		"!avatar <usermention> - Get the PFP of any user in the server! Usage: `!avatar @ziadsk`",
 	}
@@ -492,7 +509,7 @@ func main() {
 			}
 		}
 
-		if weatherWaiting[m.Author.ID] || timeWaiting[m.Author.ID] || defineWaiting[m.Author.ID] {
+		if weatherWaiting[m.Author.ID] || timeWaiting[m.Author.ID] || defineWaiting[m.Author.ID] || shortenWaiting[m.Author.ID] {
 			if m.Content == "!cancel" {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Your request has been cancelled.", userMention))
 				return
@@ -659,6 +676,92 @@ func main() {
 			s.ChannelMessageSend(m.ChannelID, msg)
 
 			delete(defineWaiting, m.Author.ID)
+		} else if strings.HasPrefix(m.Content, "!shorten") {
+			url := strings.TrimSpace(strings.TrimPrefix(m.Content, "!shorten"))
+			if url == "" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Please provide a valid URL. Example: !shorten `apple.com`", userMention))
+				return
+			}
+
+			shortenWaiting[m.Author.ID] = true
+
+			// add https:// if missing
+			if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
+				url = "https://" + url
+			}
+
+			matched, _ := regexp.MatchString(`^(https?://)[^\s$.?#].[^\s]*$`, url)
+			if !matched {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Please enter a valid URL, e.g `apple.com`.", userMention))
+				return
+			}
+
+			requestBody, _ := json.Marshal(map[string]string{
+				"url": url,
+			})
+
+			// post request
+			resp, err := http.Post("https://shrturl-u17c.onrender.com/shorten", "application/json", bytes.NewBuffer(requestBody))
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, Failed to reach shortening service!", userMention))
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to shorten url", userMention))
+				return
+			}
+
+			var result map[string]string
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Invalid response from server.", userMention))
+				return
+			}
+
+			shortURL, ok := result["short_url"]
+			if !ok {
+				s.ChannelMessageSend(m.ChannelID, "⚠️ Unexpected server response.")
+				return
+			}
+
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Shortened URL: %s", userMention, shortURL))
+
+			delete(shortenWaiting, m.Author.ID)
+		} else if strings.HasPrefix(m.Content, "!ai") {
+			key := aiKey
+
+			prompt := strings.TrimSpace(strings.TrimPrefix(m.Content, "!ai"))
+			if prompt == "" {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Please enter a valid request.", userMention))
+				return
+			}
+
+			apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=%s", key)
+
+			requestBody := map[string]interface{}{
+				"contents": []map[string]interface{}{
+					{
+						"parts": []map[string]string{
+							{"text": prompt},
+						},
+					},
+				},
+			}
+
+			jsonBody, _ := json.Marshal(requestBody)
+			resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonBody))
+			if err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to reach Gemini!", userMention))
+			}
+			defer resp.Body.Close()
+
+			body, _ := io.ReadAll(resp.Body)
+			var result map[string]interface{}
+			if err := json.Unmarshal(body, &result); err != nil {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s Failed to parse Gemini response!"))
+				return
+			}
 
 		} else if strings.HasPrefix(m.Content, "!gif") {
 
