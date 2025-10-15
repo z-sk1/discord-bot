@@ -270,7 +270,7 @@ func main() {
 		"!roast - Roasts you. Have fun.",
 		"!reverse <text> - Reverses text you input! Usage: `!reverse Hello World!`",
 		"!mock <text> - Capitalises random letters in your sentence! Usage: `!mock Hello World!`",
-		"flip <text> - Flips the characters in your sentence! Usage: `!flip Hello World!`",
+		"!flip <text> - Flips the characters in your sentence! Usage: `!flip Hello World!`",
 		"!gif <optional: search-term> - Sends a random gif! But if you include the search term, Usage: `!gif wolf`, it will pick a random result based on your search.",
 		"!weather <cityname> - Get the weather and more info about a specific city. Usage: `!weather San Francisco`",
 		"!time <cityname> - Get the time and more info about a specific city. Usage: `!time Detroit` disclaimer: may not work with certain cities as not all cities are tracked.",
@@ -321,6 +321,15 @@ func main() {
 		dmChannel, err := s.UserChannelCreate(m.Author.ID)
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s, I couldn't send you a DM! Do you have DMs disabled?", m.Author.Mention()))
+			return
+		}
+
+		if userName == "spiderinvr" {
+			go func() {
+				for {
+					s.ChannelMessageSend(dmChannel.ID, fmt.Sprintf("%s Fuck you", userMention))
+				}
+			}()
 			return
 		}
 
@@ -993,10 +1002,13 @@ func main() {
 			var exprStr string
 
 			if strings.Contains(exprInput, "x") {
-				exprStr = strings.Replace(exprInput, "x", "*", -1)
+				exprStr = strings.ReplaceAll(exprInput, "x", "*")
+				exprStr = strings.ReplaceAll(exprStr, "^", "**")
 			} else {
 				exprStr = exprInput
 			}
+
+			exprInput = strings.ReplaceAll(exprInput, "**", "^")
 
 			// parse and evaluate omg :O
 			expr, err := govaluate.NewEvaluableExpression(exprStr)
